@@ -6,6 +6,23 @@ SIGNING_MODE=${CODEXBAR_SIGNING:-}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
+detect_developer_id_identity() {
+  security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/^[[:space:]]*[0-9]*) [A-F0-9]* "\(Developer ID Application: .*\)"$/\1/p' \
+    | head -n 1
+}
+
+team_id_for_identity() {
+  local identity="$1"
+  if [[ -z "$identity" ]]; then
+    return 1
+  fi
+  security find-certificate -c "$identity" -p 2>/dev/null \
+    | openssl x509 -noout -subject 2>/dev/null \
+    | sed -n 's/.*OU=\([^,]*\).*/\1/p' \
+    | head -n 1
+}
+
 # Load version info
 source "$ROOT/version.env"
 
@@ -214,6 +231,11 @@ if [[ "$SIGNING_MODE" == "adhoc" ]]; then
   AUTO_CHECKS=false
 fi
 WIDGET_BUNDLE_ID="${BUNDLE_ID}.widget"
+if [[ -z "${APP_IDENTITY:-}" && "$SIGNING_MODE" != "adhoc" && "$ALLOW_LLDB" != "1" ]]; then
+  APP_IDENTITY="$(detect_developer_id_identity || true)"
+  export APP_IDENTITY
+fi
+APP_TEAM_ID="${APP_TEAM_ID:-$(team_id_for_identity "${APP_IDENTITY:-}" || true)}"
 APP_TEAM_ID="${APP_TEAM_ID:-Y5PE65HELJ}"
 APP_GROUP_ID="${APP_TEAM_ID}.com.steipete.codexbar"
 if [[ "$BUNDLE_ID" == *".debug"* ]]; then

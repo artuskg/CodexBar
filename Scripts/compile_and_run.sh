@@ -64,6 +64,12 @@ has_signing_identity() {
   security find-identity -p codesigning -v 2>/dev/null | grep -F "${identity}" >/dev/null 2>&1
 }
 
+detect_developer_id_identity() {
+  security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/^[[:space:]]*[0-9]*) [A-F0-9]* "\(Developer ID Application: .*\)"$/\1/p' \
+    | head -n 1
+}
+
 resolve_signing_mode() {
   if [[ -n "${SIGNING_MODE}" ]]; then
     return
@@ -80,10 +86,15 @@ resolve_signing_mode() {
   fi
 
   local candidate=""
-  for candidate in \
-    "Developer ID Application: Peter Steinberger (Y5PE65HELJ)" \
-    "CodexBar Development"
-  do
+  candidate="$(detect_developer_id_identity || true)"
+  if [[ -n "${candidate}" ]] && has_signing_identity "${candidate}"; then
+    APP_IDENTITY="${candidate}"
+    export APP_IDENTITY
+    SIGNING_MODE="identity"
+    return
+  fi
+
+  for candidate in "CodexBar Development"; do
     if has_signing_identity "${candidate}"; then
       APP_IDENTITY="${candidate}"
       export APP_IDENTITY
